@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -21,12 +23,13 @@ func init() {
 	log.Println("Load Configuration Successfully")
 	readConfig()
 }
-func main() {
 
+func main() {
 	http.HandleFunc("/", handler)
 	log.Printf("Server started at :%s", configuration.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", configuration.Port), nil))
 }
+
 func readConfig() {
 	file, err := os.Open("api.json")
 	if err != nil {
@@ -41,83 +44,71 @@ func readConfig() {
 	if err := json.Unmarshal(bytes, &configuration); err != nil {
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
-
+	for prefix, target := range configuration.APIMapping {
+		if prefix == "" || target == "" {
+			log.Fatalf("Invalid API mapping: prefix=%s, target=%s", prefix, target)
+		}
+	}
 }
 func handler(w http.ResponseWriter, r *http.Request) {
-	pathname := r.URL.Path
-	log.Printf("Incoming request: %s %s", r.Method, pathname)
+	log.Printf("Incoming request: %s %s", r.Method, r.URL.Path)
 
-	switch pathname {
+	switch r.URL.Path {
 	case "/", "/index.html":
-		log.Println("Handling root or index request")
 		writeResponse(w, http.StatusOK, "text/html", "Service is running!")
 		return
 	case "/robots.txt":
-		log.Println("Handling robots.txt request")
 		writeResponse(w, http.StatusOK, "text/plain", "User-agent: *\nDisallow: /")
 		return
 	}
 
-	prefix, rest := extractPrefixAndRest(pathname)
+	prefix, rest := extractPrefixAndRest(r.URL.Path)
 	if prefix == "" {
-		log.Printf("No matching prefix found for path: %s", pathname)
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
 
-	targetURL := configuration.APIMapping[prefix] + rest
-	log.Printf("Forwarding request to: %s", targetURL)
+	targetBase := configuration.APIMapping[prefix]
+	query := r.URL.RawQuery
+	if query != "" {
+		query = "?" + query
+	}
+	targetURL := targetBase + rest + query
+
+	log.Printf("Matched prefix: %s, Rest path: %s, Target URL: %s", prefix, rest, targetURL)
 	forwardRequest(w, r, targetURL)
 }
 
 func forwardRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
-	log.Printf("Creating new request to target URL: %s", targetURL)
-	req, err := http.NewRequest(r.Method, targetURL, r.Body)
+	target, err := url.Parse(targetURL)
 	if err != nil {
-		log.Printf("Failed to create request: %v", err)
-		http.Error(w, "Failed to create request: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Failed to parse target URL: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	copyHeaders(r.Header, req.Header, []string{"Accept", "Content-Type", "Authorization"})
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Failed to forward request: %v", err)
-		http.Error(w, "Failed to forward request: "+err.Error(), http.StatusInternalServerError)
-		return
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Director = func(req *http.Request) {
+		req.Method = r.Method
+		req.Host = target.Host // 关键修复点
+		req.URL = target
+		log.Printf("Forwarding request to: %s", req.URL)
+		req.Header = r.Header.Clone()
+		req.Body = r.Body
 	}
-	defer resp.Body.Close()
 
-	log.Printf("Received response from target URL: %s, Status: %s", targetURL, resp.Status)
-	setSecurityHeaders(w)
-	copyHeaders(resp.Header, w.Header(), nil)
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		setSecurityHeaders(resp.Header)
+		return nil
+	}
+
+	proxy.ServeHTTP(w, r)
 }
 
-func copyHeaders(src http.Header, dest http.Header, allowedHeaders []string) {
-	if allowedHeaders == nil {
-		for key, values := range src {
-			for _, value := range values {
-				dest.Add(key, value)
-			}
-		}
-		return
-	}
-
-	for _, h := range allowedHeaders {
-		if val := src.Get(h); val != "" {
-			dest.Set(h, val)
-		}
-	}
-}
-
-func setSecurityHeaders(w http.ResponseWriter) {
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Referrer-Policy", "no-referrer")
+func setSecurityHeaders(header http.Header) {
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("X-Frame-Options", "DENY")
+	header.Set("Referrer-Policy", "no-referrer")
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, contentType, body string) {
@@ -127,10 +118,19 @@ func writeResponse(w http.ResponseWriter, statusCode int, contentType, body stri
 }
 
 func extractPrefixAndRest(pathname string) (string, string) {
+	var matchedPrefix string
+	var matchedRest string
+
+	// 遍历所有前缀，找到最长的匹配前缀
 	for prefix := range configuration.APIMapping {
 		if strings.HasPrefix(pathname, prefix) {
-			return prefix, pathname[len(prefix):]
+			// 如果当前匹配的前缀比之前匹配的前缀更长，则更新
+			if len(prefix) > len(matchedPrefix) {
+				matchedPrefix = prefix
+				matchedRest = pathname[len(prefix):]
+			}
 		}
 	}
-	return "", ""
+
+	return matchedPrefix, matchedRest
 }
