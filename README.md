@@ -24,10 +24,10 @@ chmox +x aiproxy-linux-amd64
 
 ### 2. 配置
 
-编辑 `config.json` 文件，设置服务器端口和 API 映射规则。以下是一个示例配置：
+编辑 `api.json` 文件，设置服务器端口和 API 映射规则。以下是一个示例配置：
 
 ```bash
-vim config.json
+vim api.json
 ```
 
 ```json
