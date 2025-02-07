@@ -19,6 +19,7 @@
 
 ```bash
 wget https://github.com/meowrain/ai-proxy/releases/download/V1.0.0/aiproxy-linux-amd64
+chmox +x aiproxy-linux-amd64
 ```
 
 ### 2. 配置
