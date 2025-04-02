@@ -90,11 +90,19 @@ func forwardRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.Director = func(req *http.Request) {
 		req.Method = r.Method
-		req.Host = target.Host // 关键修复点
+		req.Host = target.Host
 		req.URL = target
 		log.Printf("Forwarding request to: %s", req.URL)
 		req.Header = r.Header.Clone()
-		req.Body = r.Body
+		if r.Body != nil {
+			req.Body = r.Body
+			req.ContentLength = r.ContentLength
+		}
+		for name, values := range r.Header {
+			for _, value := range values {
+				req.Header.Add(name, value)
+			}
+		}
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
