@@ -99,6 +99,7 @@ func forwardRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
 			req.ContentLength = r.ContentLength
 		}
 		for name, values := range r.Header {
+			req.Header.Del(name)
 			for _, value := range values {
 				req.Header.Add(name, value)
 			}
