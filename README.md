@@ -11,9 +11,17 @@
 *   支持通过Docker部署。
 
 ## 运行
+
+防火墙放行
+
 ```bash
-docker run -d \
-  --add-host=host.docker.internal:$(ip -4 addr show docker0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}') \
+sudo iptables -I INPUT -p tcp --dport 2080 -s 172.17.0.0/16 -j ACCEPT
+```
+
+
+```bash
+docker run -d \              
+  --add-host=host.docker.internal:host-gateway \
   -p 8094:8094 \
   ai-proxy:latest
 ```
