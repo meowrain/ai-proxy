@@ -1,7 +1,7 @@
 {
   "proxy": {
     "type": "socks5",
-    "url": "127.0.0.1:2080"
+    "url": "host.docker.internal:2080"
   },
   "port": "8094",
   "api_mapping": {
