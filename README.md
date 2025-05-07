@@ -10,6 +10,13 @@
 *   灵活的`api.json`配置文件。
 *   支持通过Docker部署。
 
+## 运行
+```bash
+docker run -d \
+  --add-host=host.docker.internal:$(ip -4 addr show docker0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}') \
+  -p 8094:8094 \
+  ai-proxy:latest
+```
 ## 配置文件 (`api.json`)
 
 `api.json` 文件用于定义代理服务器的监听端口、API路由映射以及代理设置。
@@ -89,21 +96,13 @@
 ```bash
 # 标准构建
 docker build -t go-ai-proxy .
-
-# 构建时如需通过宿主机代理下载依赖 (例如 go mod download)
-   docker build \
-     --build-arg HTTP_PROXY="http://your_host_http_proxy_ip:port" \
-     --build-arg HTTPS_PROXY="https://your_host_https_proxy_ip:port" \
-     --build-arg SOCKS_PROXY="socks5://your_host_socks_proxy_ip:port" \ # 确保格式正确
-     --build-arg NO_PROXY="localhost,127.0.0.1" \
-     -t go-ai-proxy .
 ```
 
 ### 运行容器
 
 ```bash
 # 基本运行，将容器的8090端口映射到主机的8090端口
-docker run -p 8090:8090 go-ai-proxy
+docker run -p 8094:8094 go-ai-proxy
 ```
 *(请将`8090`替换为`api.json`中配置的实际端口)*
 
@@ -127,12 +126,15 @@ docker run -p 8090:8090 go-ai-proxy
 2.  **运行容器**:
     *   **Docker Desktop (Mac/Windows):**
         ```bash
-        docker run -p 8090:8090 go-ai-proxy
+        docker run -p 8090:8094 go-ai-proxy
         ```
     *   **Linux (Docker 18.03+):**
         为了使 `host.docker.internal` 在Linux上生效，需要添加 `--add-host` 参数：
         ```bash
-        docker run --add-host=host.docker.internal:host-gateway -p 8090:8090 go-ai-proxy
+        docker run \
+        --add-host=host.docker.internal:$(ip -4 addr show docker0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}') \
+        -p 8094:8094 \
+        ai-proxy
         ```
     *   **Linux (备选方案，共享宿主机网络 - 牺牲隔离性):**
         ```bash
