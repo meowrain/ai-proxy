@@ -1,4 +1,8 @@
 {
+  "proxy": {
+    "type": "socks5",
+    "url": "127.0.0.1:2080"
+  },
   "port": "8090",
   "api_mapping": {
     "/discord": "https://discord.com/api",
