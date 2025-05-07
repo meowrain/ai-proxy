@@ -20,10 +20,10 @@ sudo iptables -I INPUT -p tcp --dport 2080 -s 172.17.0.0/16 -j ACCEPT
 
 
 ```bash
-docker run -d \              
+docker run -d \
   --add-host=host.docker.internal:host-gateway \
   -p 8094:8094 \
-  ai-proxy:latest
+  meowrian/ai-proxy:latest
 ```
 ## 配置文件 (`api.json`)
 
